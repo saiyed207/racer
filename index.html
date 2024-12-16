@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Car Racing Game</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .game-container {
+      width: 800px;
+      height: 600px;
+      background-color: #2f2f2f;
+      position: relative;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      background-color: #333;
+      display: block;
+    }
+
+    .game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 40px;
+      font-weight: bold;
+      text-align: center;
+      display: none;
+    }
+
+    .restart-btn {
+      display: block;
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+      border-radius: 5px;
+      text-align: center;
+    }
+
+    .restart-btn:hover {
+      background-color: #45a049;
+    }
+
+    .score {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div class="game-over" id="gameOverMessage">
+      Game Over!
+      <button class="restart-btn" id="restartBtn">Restart</button>
+    </div>
+    <div class="score" id="scoreDisplay">Score: 0</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameOverMessage = document.getElementById('gameOverMessage');
+    const restartBtn = document.getElementById('restartBtn');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+
+    // Set canvas size
+    canvas.width = 800;
+    canvas.height = 1000;
+
+    // Load images for the player's car, the enemy cars, and the ambulance
+    const playerCarImg = new Image();
+    playerCarImg.src = 'assets/player-car.png';  // Update path to your actual image
+    const audiCarImg = new Image();
+    audiCarImg.src = 'assets/audi.png';
+    const miniTruckImg = new Image();
+    miniTruckImg.src = 'assets/mini_truck.png';
+    const taxiCarImg = new Image();
+    taxiCarImg.src = 'assets/taxi.png';
+    const truckCarImg = new Image();
+    truckCarImg.src = 'assets/truck.png';
+    const ambulanceImg = new Image();
+    ambulanceImg.src = 'assets/ambulance.png';  // Path to the ambulance image
+
+    // Car properties
+    const carWidth = 100; 
+    const carHeight = 120; 
+    let carLane = 1; // Start in the middle lane (index 1)
+    const laneWidth = canvas.width / 3;
+    let carX = laneWidth * carLane + (laneWidth - carWidth) / 2;
+    let carY = canvas.height - carHeight - 20;
+    let carSpeed = 5;
+
+    // Obstacles
+    let obstacles = [];
+    let obstacleSpeed = 4;
+    let obstacleFrequency = 100; // Reduced the frequency of obstacles
+
+    // Game state
+    let gameOver = false;
+    let score = 0; 
+
+    // For road stripes and lanes scrolling
+    let stripeOffset = 0;
+    let laneOffset = 0; // Scroll for lanes
+
+    // Game loop
+    function gameLoop() {
+      if (gameOver) return;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw road
+      ctx.fillStyle = '#222';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw lanes and animate their movement
+      drawLanes();
+
+      // Draw the red and white stripes along the road
+      drawStripes();
+
+      // Move and draw the car
+      moveCar();
+      drawCar();
+
+      // Generate and move obstacles
+      generateObstacles();
+      moveObstacles();
+      drawObstacles();
+
+      // Update and display the score
+      updateScore();
+
+      // Check for collisions
+      checkCollisions();
+
+      // Request next frame
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Draw lanes with animation
+    function drawLanes() {
+      ctx.setLineDash([20, 20]);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 5;
+
+      // Move the lanes upwards
+      laneOffset += carSpeed; 
+
+      // Reset lanes if they go off the screen
+      if (laneOffset > canvas.height) {
+        laneOffset = 0;
+      }
+
+      for (let i = 1; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * laneWidth, -laneOffset);  // Move lanes upward
+        ctx.lineTo(i * laneWidth, canvas.height ); // Continue drawing the lanes
+        ctx.stroke();
+      }
+    }
+
+    // Draw vertical red and white stripes along the road
+    function drawStripes() {
+      const stripeWidth = 15; 
+      const totalStripes = canvas.height / (stripeWidth * 2); 
+
+      stripeOffset += carSpeed; // Move the stripes upward as the car moves forward
+
+      // If the stripes go off-screen, reset
+      if (stripeOffset > stripeWidth * 2) {
+        stripeOffset = 0;
+      }
+
+      for (let i = 0; i < totalStripes; i++) {
+        ctx.fillStyle = (i % 2 === 0) ? 'red' : 'white';
+        ctx.fillRect(0, i * stripeWidth * 2 - stripeOffset, stripeWidth, canvas.height);  
+        ctx.fillRect(canvas.width - stripeWidth, i * stripeWidth * 2 - stripeOffset, stripeWidth, canvas.height);  
+      }
+    }
+
+    // Car movement
+    function moveCar() {
+      // Move the car left or right by one lane (A/D)
+      carX = laneWidth * carLane + (laneWidth - carWidth) / 2; // Update car's X position
+    }
+
+    // Draw the player's car
+    function drawCar() {
+      ctx.drawImage(playerCarImg, carX, carY, carWidth, carHeight);
+    }
+
+    // Generate obstacles
+    function generateObstacles() {
+      if (Math.random() < 1 / obstacleFrequency) {
+        let obstacleType = Math.floor(Math.random() * 6); // Randomly select obstacle type (0-5)
+        let obstacleLane = Math.floor(Math.random() * 3);
+        let obstacleX = laneWidth * obstacleLane + (laneWidth - carWidth) / 2;
+        let obstacleImg;
+
+        // Choose obstacle image based on the random value
+        switch (obstacleType) {
+          case 0:
+            obstacleImg = audiCarImg;
+            break;
+          case 1:
+            obstacleImg = miniTruckImg;
+            break;
+          case 2:
+            obstacleImg = taxiCarImg;
+            break;
+          case 3:
+            obstacleImg = truckCarImg;
+            break;
+          case 4:
+            obstacleImg = ambulanceImg;  // Ambulance
+            break;
+          default:
+            obstacleImg = audiCarImg;  // Default obstacle (Audi)
+        }
+
+        obstacles.push({
+          x: obstacleX,
+          y: -120, 
+          width: carWidth,
+          height: carHeight,
+          img: obstacleImg
+        });
+      }
+    }
+
+    // Move obstacles
+    function moveObstacles() {
+      for (let i = 0; i < obstacles.length; i++) {
+        obstacles[i].y += obstacleSpeed;
+        if (obstacles[i].y > canvas.height) {
+          obstacles.splice(i, 1);
+          i--;
+          score++; 
+        }
+      }
+    }
+
+    // Draw obstacles
+    function drawObstacles() {
+      for (let i = 0; i < obstacles.length; i++) {
+        ctx.drawImage(obstacles[i].img, obstacles[i].x, obstacles[i].y, obstacles[i].width, obstacles[i].height);
+      }
+    }
+
+    // Update and display score
+    function updateScore() {
+      scoreDisplay.textContent = `Score: ${score}`;
+    }
+
+    // Check for collisions
+    function checkCollisions() {
+      for (let i = 0; i < obstacles.length; i++) {
+        if (
+          carX < obstacles[i].x + obstacles[i].width &&
+          carX + carWidth > obstacles[i].x &&
+          carY < obstacles[i].y + obstacles[i].height &&
+          carY + carHeight > obstacles[i].y
+        ) {
+          gameOver = true;
+          gameOverMessage.style.display = 'block';
+        }
+      }
+    }
+
+    // Reset the game
+    function resetGame() {
+      gameOver = false;
+      carLane = 1;
+      carX = laneWidth * carLane + (laneWidth - carWidth) / 2;
+      carY = canvas.height - carHeight - 20;
+      obstacles = [];
+      score = 0;
+      stripeOffset = 0;
+      laneOffset = 0; // Reset lane offset
+      gameOverMessage.style.display = 'none';
+      gameLoop();
+    }
+
+    // Mouse click event to select the lane
+    canvas.addEventListener('click', function(e) {
+      const mouseX = e.offsetX; // Get X position of the mouse click
+      const clickedLane = Math.floor(mouseX / laneWidth); // Determine lane based on X position
+      carLane = clickedLane; // Update the car's lane
+      carX = laneWidth * carLane + (laneWidth - carWidth) / 2; // Update car's X position
+    });
+
+    // Restart game when the button is clicked
+    restartBtn.addEventListener('click', resetGame);
+
+    // Start the game loop
+    gameLoop();
+  </script>
+</body>
+</html>
